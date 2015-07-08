@@ -1,0 +1,150 @@
+/*This code was built on sensor code parts created by BARRAGAN and code parts for the DS18B20 by http://bildr.org/2011/07/ds18b20-arduino/
+ *The rest of the code was pieced together from the Arduino samples
+ */
+#include <Time.h>
+
+#define TIME_HEADER  "T"   // Header tag for serial time sync message
+#define TIME_REQUEST  7 
+#include <OneWire.h> 
+int sensorValue1, sensorValue2, sensorValue3, sensorValue4;
+int DS18S20_Pin = 7; //DS18S20 Signal pin on digital 7
+
+//Temperature chip i/o
+OneWire ds(DS18S20_Pin); // on digital pin 2 (choose pins to suit your setup)
+#include <SoftwareSerial.h>
+SoftwareSerial bt(3,2); // RX, TX BlueTooth serial communication pins - You may need to change these depending on your setup
+ 
+#define TIME_REQUEST  7    // ASCII bell character requests a time sync message 
+void setup()  {
+  bt.begin(9600);
+  while (!bt) ; // Needed for Leonardo only
+  pinMode(13, OUTPUT);
+  setSyncProvider( requestSync);  //set function to call when sync required
+  bt.println("Waiting for sync message");
+}
+float getTemp(){
+ //returns the temperature from one DS18S20 in DEG Celsius
+byte data[12];
+byte addr[8];
+ if ( !ds.search(addr)) {
+   //no more sensors on chain, reset search
+   ds.reset_search();
+   return -1000;
+ }
+ if ( OneWire::crc8( addr, 7) != addr[7]) {
+   bt.println("CRC is not valid!");
+   return -1000;
+ }
+ if ( addr[0] != 0x10 && addr[0] != 0x28) {
+   bt.print("Device is not recognized");
+   return -1000;
+ }
+ ds.reset();
+ ds.select(addr);
+ ds.write(0x44,1); // start conversion, with parasite power on at the end
+ byte present = ds.reset();
+ ds.select(addr);  
+ ds.write(0xBE); // Read Scratchpad
+ for (int i = 0; i < 9; i++) { // we need 9 bytes
+ data[i] = ds.read();
+ }
+ ds.reset_search();
+ byte MSB = data[1];
+ byte LSB = data[0];
+ float tempRead = ((MSB << 8) | LSB); //using two's compliment
+ float TemperatureSum = tempRead / 16;
+ return TemperatureSum;
+}
+void loop(){    
+  if (bt.available()) {
+    processSyncMessage();
+  }
+  if (timeStatus()!= timeNotSet) {
+    printdata();;  
+  }
+  if (timeStatus() == timeSet) {
+    digitalWrite(13, HIGH); // LED on if synced
+  } else {
+    digitalWrite(13, LOW);  // LED off if needs refresh
+  }
+  delay(2000);
+}
+
+void printdata(){
+float temperature = getTemp();
+sensorValue1 = analogRead(0);  // read sensor in analog input 0
+//If you need more sensors then uncode the comments below
+//sensorValue2 = analogRead(1);  // read sensor in analog input 1
+//sensorValue3 = analogRead(2);  // read sensor in analog input 2
+//sensorValue4 = analogRead(3);  // read sensor in analog input 3
+bt.print("Data,");//Header line to signify the start of the data strings
+bt.print("Light,");
+bt.print(sensorValue1, DEC);  // print sensor 1
+bt.print(",");
+bt.print("Temperature,");
+bt.print(temperature);
+bt.print(",");
+//Serial.print(sensorValue2, DEC);  // print sensor 2
+//Serial.print(",");                // print ','
+//Serial.print(sensorValue3, DEC);  // print sensor 3
+//Serial.print(",");                // print ','
+//Serial.println(sensorValue4, DEC);  // print sensor 4 and newline (println)
+bt.print("Time");
+bt.print(",");
+hourPrintDigits(hour());
+printDigits(minute());
+printDigits(second());
+bt.print(",");
+bt.print(day());
+bt.print("/");
+bt.print(month());
+bt.print("/");
+bt.print(year());
+bt.println();
+}
+
+void digitalClockDisplay(){
+  // digital clock display of the time
+  bt.print(hour());
+  printDigits(minute());
+  printDigits(second());
+  bt.print(" ");
+  bt.print(day());
+  bt.print(" ");
+  bt.print(month());
+  bt.print(" ");
+  bt.print(year()); 
+  bt.println(); 
+}
+
+void printDigits(int digits){
+  // utility function for digital clock display: prints preceding colon and leading 0
+  bt.print(":");
+  if(digits < 10)
+    bt.print('0');
+  bt.print(digits);
+}
+
+void hourPrintDigits(int digits){
+// utility function for digital clock display: prints preceding colon and leading 0
+if(digits < 10)
+bt.print('0');
+bt.print(digits);
+}
+
+void processSyncMessage() {
+  unsigned long pctime;
+  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
+      if(bt.find(TIME_HEADER)) {
+      pctime = bt.parseInt();
+     if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
+       setTime(pctime); // Sync Arduino clock to the time received on the serial port
+     }
+  }
+}
+
+time_t requestSync()
+{
+  bt.write(TIME_REQUEST);  
+  return 0; // the time will be sent later in response to serial mesg
+}
