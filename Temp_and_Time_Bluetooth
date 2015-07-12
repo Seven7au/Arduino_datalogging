@@ -4,17 +4,24 @@
 #include <Time.h>
 
 #define TIME_HEADER  "T"   // Header tag for serial time sync message
-#define TIME_REQUEST  7 
+#define TIME_REQUEST  7    // ASCII bell character requests a time sync message 
 #include <OneWire.h> 
-int sensorValue1, sensorValue2, sensorValue3, sensorValue4;
-int DS18S20_Pin = 7; //DS18S20 Signal pin on digital 7
 
-//Temperature chip i/o
-OneWire ds(DS18S20_Pin); // on digital pin 2 (choose pins to suit your setup)
 #include <SoftwareSerial.h>
 SoftwareSerial bt(3,2); // RX, TX BlueTooth serial communication pins - You may need to change these depending on your setup
- 
-#define TIME_REQUEST  7    // ASCII bell character requests a time sync message 
+
+int sensorValue1, sensorValue2, sensorValue3, sensorValue4;
+int DS18S20_Pin = 7; //DS18S20 Signal pin on digital 7
+//Temperature chip i/o
+OneWire ds(DS18S20_Pin); // on digital pin 2 (choose pins to suit your setup)
+
+float getTemp();
+void printdata();
+void digitalClockDisplay();
+void printDigits(int digits);
+void hourPrintDigits(int digits);
+void processSyncMessage();
+
 void setup()  {
   bt.begin(9600);
   while (!bt) ; // Needed for Leonardo only
@@ -22,6 +29,22 @@ void setup()  {
   setSyncProvider( requestSync);  //set function to call when sync required
   bt.println("Waiting for sync message");
 }
+
+void loop(){    
+  if (bt.available()) {
+    processSyncMessage();
+  }
+  if (timeStatus()!= timeNotSet) {
+    printdata();;  
+  }
+  if (timeStatus() == timeSet) {
+    digitalWrite(13, HIGH); // LED on if synced
+  } else {
+    digitalWrite(13, LOW);  // LED off if needs refresh
+  }
+  delay(2000);
+}
+
 float getTemp(){
  //returns the temperature from one DS18S20 in DEG Celsius
 byte data[12];
@@ -54,20 +77,6 @@ byte addr[8];
  float tempRead = ((MSB << 8) | LSB); //using two's compliment
  float TemperatureSum = tempRead / 16;
  return TemperatureSum;
-}
-void loop(){    
-  if (bt.available()) {
-    processSyncMessage();
-  }
-  if (timeStatus()!= timeNotSet) {
-    printdata();;  
-  }
-  if (timeStatus() == timeSet) {
-    digitalWrite(13, HIGH); // LED on if synced
-  } else {
-    digitalWrite(13, LOW);  // LED off if needs refresh
-  }
-  delay(2000);
 }
 
 void printdata(){
