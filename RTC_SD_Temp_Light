@@ -1,3 +1,5 @@
+/* This code was taken from https://github.com/adafruit/Light-and-Temp-logger
+*/
 #include <SD.h>
 #include <Wire.h>
 #include "RTClib.h"
